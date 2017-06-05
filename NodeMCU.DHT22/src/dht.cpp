@@ -59,6 +59,7 @@ dht::dht(gpio_num_t pin)
   io_conf.pull_up_en = gpio_pullup_t::GPIO_PULLUP_DISABLE;
   //configure GPIO with the given settings
   gpio_config(&io_conf);
+  //gpio_set_level(m_pin, HIGH); // Normal bus state is high
 }
 
 /////////////////////////////////////////////////////
@@ -136,15 +137,18 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
 
     // REQUEST SAMPLE
     gpio_set_level(m_pin, LOW); // T-be
-    sys_msleep(wakeupDelay);
+    sys_msleep(18);
     gpio_set_level(m_pin, HIGH); // T-go
+    printf("Requested sample!\n");
 
+    printf("Waiting for ack LOW\n");
     uint16_t loopCount = DHTLIB_TIMEOUT * 2;  // 200uSec max
     while(gpio_get_level(m_pin) == HIGH)
     {
         if (--loopCount == 0) return DHTLIB_ERROR_CONNECT;
     }
 
+    printf("Waiting for ack HIGH\n");
     // GET ACKNOWLEDGE or TIMEOUT
     loopCount = DHTLIB_TIMEOUT;
     while(gpio_get_level(m_pin) == LOW)
@@ -152,11 +156,6 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
         if (--loopCount == 0) return DHTLIB_ERROR_ACK_L;
     }
 
-    loopCount = DHTLIB_TIMEOUT;
-    while(gpio_get_level(m_pin) == HIGH)
-    {
-        if (--loopCount == 0) return DHTLIB_ERROR_ACK_H;
-    }
 
     loopCount = DHTLIB_TIMEOUT;
 
@@ -165,6 +164,8 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
     {
         // WAIT FOR FALLING EDGE
         state = gpio_get_level(m_pin);
+        printf("Got state\n");
+
         if (state == LOW && pstate != LOW)
         {
             if (i > leadingZeroBits) // DHT22 first 6 bits are all zero !!   DHT11 only 1
