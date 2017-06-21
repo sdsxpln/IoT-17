@@ -42,24 +42,26 @@
 #include "driver/gpio.h"
 #include "dht.h"
 #include <algorithm>
+#include <rom/ets_sys.h>
 
 dht::dht(gpio_num_t pin)
 {
   m_pin = pin;
+
   gpio_config_t io_conf;
   //disable interrupt
   io_conf.intr_type = gpio_int_type_t::GPIO_INTR_DISABLE;
   //set as output mode
-  io_conf.mode = gpio_mode_t::GPIO_MODE_INPUT_OUTPUT;
+  io_conf.mode = gpio_mode_t::GPIO_MODE_OUTPUT;
   //bit mask of the pins that you want to set,e.g.GPIO18/19
-  io_conf.pin_bit_mask = (1 << pin);
+  io_conf.pin_bit_mask = (1 << m_pin);
   //disable pull-down mode
   io_conf.pull_down_en = gpio_pulldown_t::GPIO_PULLDOWN_DISABLE;
   //disable pull-up mode
   io_conf.pull_up_en = gpio_pullup_t::GPIO_PULLUP_DISABLE;
   //configure GPIO with the given settings
   gpio_config(&io_conf);
-  //gpio_set_level(m_pin, HIGH); // Normal bus state is high
+
 }
 
 /////////////////////////////////////////////////////
@@ -135,28 +137,33 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
 
     leadingZeroBits = 40 - leadingZeroBits; // reverse counting...
 
+
     // REQUEST SAMPLE
+    printf("Requested sample (new2)!\n");
+    gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_OUTPUT);
     gpio_set_level(m_pin, LOW); // T-be
-    sys_msleep(18);
+    ets_delay_us(1000);
     gpio_set_level(m_pin, HIGH); // T-go
-    printf("Requested sample!\n");
+    gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_INPUT);
 
     printf("Waiting for ack LOW\n");
-    uint16_t loopCount = DHTLIB_TIMEOUT * 2;  // 200uSec max
+    ets_delay_us(10);
+    uint16_t loopCount = 8;
     while(gpio_get_level(m_pin) == HIGH)
     {
         if (--loopCount == 0) return DHTLIB_ERROR_CONNECT;
+        ets_delay_us(10);
     }
-
     printf("Waiting for ack HIGH\n");
     // GET ACKNOWLEDGE or TIMEOUT
-    loopCount = DHTLIB_TIMEOUT;
+    loopCount = 8;
     while(gpio_get_level(m_pin) == LOW)
     {
         if (--loopCount == 0) return DHTLIB_ERROR_ACK_L;
+        ets_delay_us(10);
     }
 
-
+return DHTLIB_ERROR_ACK_L;
     loopCount = DHTLIB_TIMEOUT;
 
     // READ THE OUTPUT - 40 BITS => 5 BYTES
@@ -164,7 +171,6 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
     {
         // WAIT FOR FALLING EDGE
         state = gpio_get_level(m_pin);
-        printf("Got state\n");
 
         if (state == LOW && pstate != LOW)
         {
@@ -199,6 +205,7 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
         }
 
     }
+    gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_OUTPUT);
     gpio_set_level(m_pin, HIGH);
     return DHTLIB_OK;
 }

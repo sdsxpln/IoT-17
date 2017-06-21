@@ -29,7 +29,7 @@
 
 
 extern "C" void app_main() {
-	dht sensor((gpio_num_t)4);
+	dht sensor((gpio_num_t)26);
 
 printf("DHT22, \t");
 int chk = sensor.read22();
