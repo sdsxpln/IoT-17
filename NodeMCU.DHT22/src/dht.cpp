@@ -139,7 +139,7 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
 
 
     // REQUEST SAMPLE
-    printf("Requested sample (new2)!\n");
+    printf("Requested sample (new4)!\n");
     gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_OUTPUT);
     gpio_set_level(m_pin, LOW); // T-be
     ets_delay_us(1000);
