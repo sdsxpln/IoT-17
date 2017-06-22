@@ -148,6 +148,7 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
 
     printf("Waiting for ack LOW\n");
     ets_delay_us(10);
+    //microseconds system_get_time();
     uint16_t loopCount = 8;
     while(gpio_get_level(m_pin) == HIGH)
     {
