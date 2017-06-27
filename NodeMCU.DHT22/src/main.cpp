@@ -38,7 +38,7 @@ void sendSensorInit()
     gpio_set_level(SENSOR_PIN,0); //Bring the bus down, wait for sensor
 }
 
-void getSensorAck()
+void readAck()
 {
     //Sensor ack starts with zero and zero lasts T-rel usec
     int32_t rel_cnt = 0;
@@ -49,19 +49,30 @@ void getSensorAck()
     int32_t reh_cnt = 0;
     while(gpio_get_level(SENSOR_PIN) == 1)
         ++reh_cnt;
-    printf("ACK T-rel: %i T-reh: %i\n",rel_cnt,reh_cnt);
 }
 
-int64_t readBit()
+int readBit(int timeout)
 {
-    int32_t low_cnt = 0;
-    while(gpio_get_level(SENSOR_PIN) == 0)
-        ++low_cnt;
-    int32_t high_cnt = 0;
-    while(gpio_get_level(SENSOR_PIN) == 1)
-        ++high_cnt;
-    printf("Bit: low: %i high: %i\n",low_cnt, high_cnt);
-    return high_cnt;
+    int lowValueCnt = 0;
+    while(gpio_get_level(SENSOR_PIN) == 0 && lowValueCnt < timeout)
+        ++lowValueCnt;
+
+    if(lowValueCnt == timeout)
+        return -1;
+
+    int highValueCnt = 0;
+    while(gpio_get_level(SENSOR_PIN) == 1 && highValueCnt < timeout)
+        ++highValueCnt;
+
+    if(highValueCnt == timeout)
+        return -1;
+
+    if(highValueCnt < lowValueCnt*0.9)
+        return 0;
+    else if(highValueCnt > lowValueCnt*1.1)
+        return 1;
+
+    return -1;
 }
 
 bool readPin(int& value, int& duration,int timeout)
@@ -73,12 +84,37 @@ bool readPin(int& value, int& duration,int timeout)
     return duration < timeout;
 }
 
-typedef struct tagValTime
+bool readPulse(int& lowDuration, int& highDuration, int timeout)
 {
-    tagValTime() : value(0), duration(0){}
-    int value;
-    int duration;
-} ValTime;
+    lowDuration = 0;
+    highDuration = 0;
+    while(gpio_get_level(SENSOR_PIN) == 0 && lowDuration < timeout)
+        ++lowDuration;
+
+    if(lowDuration == timeout)
+        return false;
+
+    while(gpio_get_level(SENSOR_PIN) == 1 && highDuration < timeout)
+        ++highDuration;
+
+    if(highDuration == timeout)
+        return false;
+
+    return true;
+}
+
+
+typedef struct tagPulseInfo
+{
+    tagPulseInfo() : lowDuration(0), highDuration(0){}
+    int lowDuration;
+    int highDuration;
+
+    bool isSet()
+    {
+        return highDuration > 1.1*lowDuration;
+    }
+} PulseInfo;
 
 //mbedtls_net_usleep(25);
 extern "C" void app_main()
@@ -91,28 +127,68 @@ extern "C" void app_main()
     gpio_set_level(SENSOR_PIN,1);
     sys_msleep(10);
 
-    std::vector<ValTime> values;
-    values.reserve(128);
-
-
+    std::vector<PulseInfo> pulses;
+    pulses.reserve(48);
 
     printf("Init:\n");
     sendSensorInit();
     gpio_set_direction(SENSOR_PIN, GPIO_MODE_INPUT);
 
-    ValTime val;
-
-    while(readPin(val.value,val.duration,10000))
+    PulseInfo pulse;
+    while(readPulse(pulse.lowDuration,pulse.highDuration,10000))
     {
-        values.push_back(val);
-        val.value = 0;
-        val.duration = 0;
+        pulses.push_back(pulse);
+        pulse.lowDuration = 0;
+        pulse.highDuration = 0;
+    }
+    pulses.push_back(pulse); //Trailing off
+
+    pulses.erase(pulses.begin());
+    printf("Read %i values.\n",pulses.size());
+    for(int i = 0; i < pulses.size(); i++)
+        printf("Pulse %i:  High value: %i. Low Value: %i\n",i, pulses[i].highDuration,pulses[i].lowDuration);
+
+
+    int8_t bits[5];
+    for(int i = 0; i < 5; i++)
+        bits[i] = 0;
+
+    for(int i = 0; i < 5; i++)
+        for(int j = 0; j < 8; j++)
+            if(pulses[i*8+j].isSet())
+                bits[i] |= (1 << (7-j));
+
+
+    for(int i = 0; i < 5; i++)
+    {
+        for(int t=128; t>0; t = t/2)
+            if(bits[i] & t)
+                printf("1");
+            else
+                printf("0");
+            printf("\n");
     }
 
-    printf("Read %i values.\n",values.size());
-    for(int i = 0; i < values.size(); i++)
-        printf("%i:  Value: %i Duration: %i.\n",i, values[i].value,(values[i].duration));
+//    bits[0] &= 0x03;
+//    bits[2] &= 0x83;
 
+    // CONVERT AND STORE
+    double humidity = (bits[0] * 256 + bits[1]) * 0.1;
+    double temperature = ((bits[2] & 0x7F) * 256 + bits[3]) * 0.1;
+    if (bits[2] & 0x80)  // negative temperature
+    {
+        temperature = -temperature;
+    }
+
+    // TEST CHECKSUM
+    uint8_t sum = bits[0] + bits[1] + bits[2] + bits[3];
+
+    printf("Humidity: %f. Temp: %f. Checksum: %i. Expected checksum: %i\n",humidity,temperature,bits[4],sum);
+
+//    if (bits[4] != sum)
+//    {
+//        return DHTLIB_ERROR_CHECKSUM;
+//    }
 
 //    printf("Ack:\n");
 //    getSensorAck();
