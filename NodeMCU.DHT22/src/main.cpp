@@ -29,14 +29,6 @@
 #define GPIO_DEEP_SLEEP_DURATION     10  // sleep 30 seconds and then wake up
 #define SENSOR_PIN GPIO_NUM_26
 
-
-uint64_t usecNow()
-{
-    timeval t;
-    gettimeofday(&t, nullptr);
-    return static_cast<uint64_t>( t.tv_sec ) * 1000000ull + static_cast<uint64_t>( t.tv_usec );
-}
-
 void sendSensorInit()
 {
     gpio_set_level(SENSOR_PIN,0);
@@ -45,8 +37,6 @@ void sendSensorInit()
     ets_delay_us(30); //30 usec high T-go
     gpio_set_level(SENSOR_PIN,0); //Bring the bus down, wait for sensor
 }
-
-
 
 void getSensorAck()
 {
@@ -76,13 +66,11 @@ int64_t readBit()
 
 bool readPin(int& value, int& duration,int timeout)
 {
-    uint64_t now = usecNow();
-    int cntx = 0;
+    duration = 0;
     value = gpio_get_level(SENSOR_PIN);
-    while(gpio_get_level(SENSOR_PIN) == value && cntx < timeout)
-        ++cntx;
-    duration = (int) (usecNow() - now);
-    return cntx < timeout;
+    while(gpio_get_level(SENSOR_PIN) == value && duration < timeout)
+        ++duration;
+    return duration < timeout;
 }
 
 typedef struct tagValTime
@@ -123,7 +111,7 @@ extern "C" void app_main()
 
     printf("Read %i values.\n",values.size());
     for(int i = 0; i < values.size(); i++)
-        printf("%i:  Value: %i Duration: %i.\n",i, values[i].value,values[i].duration);
+        printf("%i:  Value: %i Duration: %i.\n",i, values[i].value,(values[i].duration));
 
 
 //    printf("Ack:\n");
