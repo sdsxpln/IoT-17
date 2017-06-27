@@ -42,26 +42,29 @@
 #include "driver/gpio.h"
 #include "dht.h"
 #include <algorithm>
+#include <time.h>
+
 #include <rom/ets_sys.h>
 
 dht::dht(gpio_num_t pin)
 {
-  m_pin = pin;
+    m_pin = pin;
 
-  gpio_config_t io_conf;
-  //disable interrupt
-  io_conf.intr_type = gpio_int_type_t::GPIO_INTR_DISABLE;
-  //set as output mode
-  io_conf.mode = gpio_mode_t::GPIO_MODE_OUTPUT;
-  //bit mask of the pins that you want to set,e.g.GPIO18/19
-  io_conf.pin_bit_mask = (1 << m_pin);
-  //disable pull-down mode
-  io_conf.pull_down_en = gpio_pulldown_t::GPIO_PULLDOWN_DISABLE;
-  //disable pull-up mode
-  io_conf.pull_up_en = gpio_pullup_t::GPIO_PULLUP_DISABLE;
-  //configure GPIO with the given settings
-  gpio_config(&io_conf);
-
+    gpio_config_t io_conf;
+    //disable interrupt
+    io_conf.intr_type = gpio_int_type_t::GPIO_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = gpio_mode_t::GPIO_MODE_OUTPUT;
+    //bit mask of the pins that you want to set,e.g.GPIO18/19
+    io_conf.pin_bit_mask = (1 << m_pin);
+    //disable pull-down mode
+    io_conf.pull_down_en = gpio_pulldown_t::GPIO_PULLDOWN_DISABLE;
+    //disable pull-up mode
+    io_conf.pull_up_en = gpio_pullup_t::GPIO_PULLUP_DISABLE;
+    //configure GPIO with the given settings
+    gpio_config(&io_conf);
+    gpio_set_direction(m_pin, gpio_mode_t::GPIO_MODE_OUTPUT);
+    gpio_set_level(m_pin, HIGH); // T-be
 }
 
 /////////////////////////////////////////////////////
@@ -79,7 +82,7 @@ int8_t dht::read11()
     bits[2] &= 0x7F;
 
     // CONVERT AND STORE
-    humidity    = bits[0];  // bits[1] == 0;
+    humidity = bits[0];  // bits[1] == 0;
     temperature = bits[2];  // bits[3] == 0;
 
     // TEST CHECKSUM
@@ -102,8 +105,8 @@ int8_t dht::read()
     bits[2] &= 0x83;
 
     // CONVERT AND STORE
-    humidity = (bits[0]*256 + bits[1]) * 0.1;
-    temperature = ((bits[2] & 0x7F)*256 + bits[3]) * 0.1;
+    humidity = (bits[0] * 256 + bits[1]) * 0.1;
+    temperature = ((bits[2] & 0x7F) * 256 + bits[3]) * 0.1;
     if (bits[2] & 0x80)  // negative temperature
     {
         temperature = -temperature;
@@ -122,35 +125,23 @@ int8_t dht::read()
 //
 // PRIVATE
 //
+#define portTICK_PERIOD_US            ( ( TickType_t ) 1000000 / configTICK_RATE_HZ )
 
 int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
 {
-    // INIT BUFFERVAR TO RECEIVE DATA
-    uint8_t mask = 128;
-    uint8_t idx = 0;
-
-    uint8_t data = 0;
-    uint8_t state = 0;
-    uint8_t pstate = 0;
-    uint16_t zeroLoop = DHTLIB_TIMEOUT;
-    uint16_t delta = 0;
-
-    leadingZeroBits = 40 - leadingZeroBits; // reverse counting...
-
-
     // REQUEST SAMPLE
-    printf("Requested sample (new4)!\n");
-    gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_OUTPUT);
+    printf("Requested sample (new5)!\n");
+    gpio_set_direction(m_pin, gpio_mode_t::GPIO_MODE_OUTPUT);
     gpio_set_level(m_pin, LOW); // T-be
-    ets_delay_us(1000);
+    ets_delay_us(3000);
     gpio_set_level(m_pin, HIGH); // T-go
-    gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_INPUT);
+    gpio_set_direction(m_pin, gpio_mode_t::GPIO_MODE_INPUT);
 
     printf("Waiting for ack LOW\n");
     ets_delay_us(10);
     //microseconds system_get_time();
     uint16_t loopCount = 8;
-    while(gpio_get_level(m_pin) == HIGH)
+    while (gpio_get_level(m_pin) == HIGH)
     {
         if (--loopCount == 0) return DHTLIB_ERROR_CONNECT;
         ets_delay_us(10);
@@ -158,13 +149,16 @@ int8_t dht::_readSensor(uint8_t wakeupDelay, uint8_t leadingZeroBits)
     printf("Waiting for ack HIGH\n");
     // GET ACKNOWLEDGE or TIMEOUT
     loopCount = 8;
-    while(gpio_get_level(m_pin) == LOW)
+    while (gpio_get_level(m_pin) == LOW)
     {
         if (--loopCount == 0) return DHTLIB_ERROR_ACK_L;
         ets_delay_us(10);
     }
 
-return DHTLIB_ERROR_ACK_L;
+    gpio_set_direction(m_pin, gpio_mode_t::GPIO_MODE_OUTPUT);
+    gpio_set_level(m_pin, HIGH); // T-be
+    return DHTLIB_ERROR_ACK_L;
+/*
     loopCount = DHTLIB_TIMEOUT;
 
     // READ THE OUTPUT - 40 BITS => 5 BYTES
@@ -209,6 +203,7 @@ return DHTLIB_ERROR_ACK_L;
     gpio_set_direction(m_pin,gpio_mode_t::GPIO_MODE_OUTPUT);
     gpio_set_level(m_pin, HIGH);
     return DHTLIB_OK;
+    */
 }
 //
 // END OF FILE
