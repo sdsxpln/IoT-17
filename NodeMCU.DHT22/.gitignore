@@ -4,3 +4,4 @@
 .gcc-flags.json
 CMakeListsPrivate.txt
 /cmake-build-debug/
+/cert/
