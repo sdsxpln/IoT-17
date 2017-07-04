@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
-project(NodeMCU.DHT22)
+project(NodeMCU.Arduino)
 
 include(CMakeListsPrivate.txt)
 

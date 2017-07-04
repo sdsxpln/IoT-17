@@ -1,0 +1,7 @@
+.pioenvs
+.piolibdeps
+CMakeListsPrivate.txt
+/certs
+src/credentials.h
+cmake-build-debug
+.idea/*
